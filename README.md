@@ -42,6 +42,32 @@ The first version of this playbook disabled the Entra ID account directly via `P
 
 The playbook now posts a clear, actionable recommendation and stops. A human approves the actual containment action. This trades a small amount of automation for removing a standing, broad-scope Graph grant from an unattended identity — the kind of tradeoff a mature SOC makes deliberately rather than defaulting to "automate everything."
 
+## Workbooks (`/workbooks`)
+
+Sentinel workbook definitions, exported as JSON and built against real lab telemetry rather than
+sample data.
+
+| Workbook | Purpose |
+|---|---|
+| `hunt-and-investigate.json` | Pivot view for working a single indicator — IP, account, or host — across the tables that carry it |
+| `soc-overview.json` | Queue health at a glance: incident volume, rule firing rates, ingestion freshness |
+
+Details in [`workbooks/README.md`](workbooks/README.md).
+
+## Infrastructure (`/infrastructure`)
+
+Bicep IaC for standing the workspace up from nothing — Log Analytics workspace, Sentinel
+onboarding, and the Data Collection Rules that feed it.
+
+| File | What it does |
+|---|---|
+| `bicep/main.bicep` | Workspace + Sentinel onboarding |
+| `bicep/dcr-syslog.bicep` | Data Collection Rule for Linux syslog facilities |
+| `bicep/dcr-windows-events.bicep` | Data Collection Rule for Windows Security events |
+| `deploy-syslog-vm.sh` / `teardown-syslog-vm.sh` | Stand up and tear down the syslog source VM |
+
+Setup walkthrough in [`infrastructure/SETUP.md`](infrastructure/SETUP.md).
+
 ## Deploying
 
 Prerequisite: an Azure Key Vault holding secrets `VirusTotalApiKey` and `OTXApiKey`, with `Key Vault Secrets User` granted to whichever principal will run `la-ip-enrichment`.

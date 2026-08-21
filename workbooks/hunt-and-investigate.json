@@ -1,0 +1,373 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": { "json": "# 🛡️ Hunt & Investigate\n### Personal Sentinel SOC lab — proactive hunting and IP investigation, in one workbook" },
+      "name": "hdr",
+      "styleSettings": { "margin": "0px 0px 10px 0px" }
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "f1",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "label": "⏱ Time range",
+            "type": 4,
+            "value": { "durationMs": 86400000 },
+            "typeSettings": {
+              "selectableValues": [
+                { "durationMs": 3600000 },
+                { "durationMs": 14400000 },
+                { "durationMs": 43200000 },
+                { "durationMs": 86400000 },
+                { "durationMs": 259200000 },
+                { "durationMs": 604800000 },
+                { "durationMs": 2592000000 }
+              ],
+              "allowCustom": true
+            }
+          },
+          {
+            "id": "f2",
+            "version": "KqlParameterItem/1.0",
+            "name": "Tab",
+            "type": 1,
+            "value": "hunt",
+            "isHiddenWhenLocked": true
+          }
+        ],
+        "style": "above"
+      },
+      "name": "filters"
+    },
+    {
+      "type": 11,
+      "content": {
+        "version": "LinkItem/1.0",
+        "style": "tabs",
+        "links": [
+          { "id": "t1", "cellValue": "Tab", "linkTarget": "parameter", "linkLabel": "🎯 Live Hunt", "subTarget": "hunt", "style": "link" },
+          { "id": "t2", "cellValue": "Tab", "linkTarget": "parameter", "linkLabel": "🔎 IP Investigation", "subTarget": "investigate", "style": "link" }
+        ]
+      },
+      "name": "tabs"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let bruteAttempts = toscalar(Syslog | where Facility in (\"auth\",\"authpriv\") | where SyslogMessage has \"Failed password\" or SyslogMessage has \"authentication failure\" | count);\nlet sensitiveOps = toscalar(let SensitiveOps = dynamic([\"Microsoft.Authorization/roleAssignments/write\",\"Microsoft.Authorization/roleAssignments/delete\",\"Microsoft.Compute/virtualMachines/delete\",\"Microsoft.KeyVault/vaults/delete\",\"Microsoft.OperationalInsights/workspaces/delete\",\"Microsoft.Resources/subscriptions/resourceGroups/delete\"]); AzureActivity | where OperationNameValue in (SensitiveOps) | count);\nlet riskySignins = toscalar(SigninLogs | where RiskLevelDuringSignIn in (\"medium\",\"high\") or ResultType != 0 | count);\nlet tiIndicators = toscalar(ThreatIntelIndicators | where Active == true | summarize dcount(IndicatorId));\nlet openIncidents = toscalar(SecurityIncident | where Status == \"New\" or Status == \"Active\" | summarize dcount(IncidentNumber));\nprint Metric = \"🔓 Auth failures\", Value = bruteAttempts, Detail = \"Syslog, this window\"\n| union (print Metric = \"⚙️ Sensitive ops\", Value = sensitiveOps, Detail = \"AzureActivity\")\n| union (print Metric = \"🪪 Risky sign-ins\", Value = riskySignins, Detail = \"SigninLogs\")\n| union (print Metric = \"🛰️ TI indicators\", Value = tiIndicators, Detail = \"active, all-time\")\n| union (print Metric = \"🚨 Open incidents\", Value = openIncidents, Detail = \"New + Active\")",
+              "size": 0,
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "tiles",
+              "tileSettings": {
+                "titleContent": { "columnMatch": "Metric", "formatter": 1 },
+                "leftContent": {
+                  "columnMatch": "Value",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "coldHot",
+                    "thresholdsOptions": "colors",
+                    "thresholdsGrid": [
+                      { "operator": ">", "thresholdValue": "0", "representation": "orange", "text": "{0}" },
+                      { "operator": "Default", "representation": "green", "text": "{0}" }
+                    ]
+                  }
+                },
+                "secondaryContent": { "columnMatch": "Detail", "formatter": 1 },
+                "showBorder": true,
+                "size": "auto"
+              },
+              "showExportToExcel": false
+            },
+            "name": "overview-tiles",
+            "styleSettings": { "showBorder": true, "margin": "0px 0px 15px 0px" }
+          },
+          {
+            "type": 1,
+            "content": { "json": "## 🔓 Failed authentication bursts\n*Remote IPs extracted from SSH auth-failure messages, ranked by burst intensity. Source is pre-filtered to auth/authpriv facilities via the lab's Syslog DCR — this is signal, not the raw firehose.*" },
+            "name": "hunt-syslog-hdr"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "Syslog\n| where Facility in (\"auth\",\"authpriv\")\n| where SyslogMessage has \"Failed password\" or SyslogMessage has \"authentication failure\" or SyslogMessage has \"Invalid user\"\n| extend RemoteIP = extract(@\"from (\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})\", 1, SyslogMessage)\n| where isnotempty(RemoteIP)\n| summarize Attempts = count(), Hosts = make_set(Computer, 5), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated), Sample = any(SyslogMessage) by RemoteIP\n| extend VT = strcat(\"https://www.virustotal.com/gui/ip-address/\", RemoteIP)\n| extend AbuseIPDB = strcat(\"https://www.abuseipdb.com/check/\", RemoteIP)\n| sort by Attempts desc\n| take 100",
+              "size": 0,
+              "title": "SSH brute-force sources",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "showExportToExcel": true,
+              "gridSettings": {
+                "formatters": [
+                  { "columnMatch": "RemoteIP", "formatter": 0, "formatOptions": { "customColumnWidthSetting": "16ch" } },
+                  { "columnMatch": "VT", "formatter": 7, "formatOptions": { "linkTarget": "Url", "linkLabel": "🔍 VT", "linkIsContextBlade": false, "customColumnWidthSetting": "8ch" } },
+                  { "columnMatch": "AbuseIPDB", "formatter": 7, "formatOptions": { "linkTarget": "Url", "linkLabel": "⚠️ Abuse", "linkIsContextBlade": false, "customColumnWidthSetting": "10ch" } },
+                  { "columnMatch": "Attempts", "formatter": 8, "formatOptions": { "palette": "yellowOrangeRed", "customColumnWidthSetting": "12ch" } }
+                ],
+                "rowLimit": 100,
+                "filter": true
+              }
+            },
+            "name": "hunt-syslog-brute",
+            "styleSettings": { "showBorder": true, "margin": "0px 0px 15px 0px" }
+          },
+          {
+            "type": 1,
+            "content": { "json": "## ⚙️ Sensitive Azure control-plane operations\n*Role assignments, resource deletions, and other high-impact operations — cross-reference against who's actually supposed to be doing admin work.*" },
+            "name": "hunt-activity-hdr"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let SensitiveOps = dynamic([\"Microsoft.Authorization/roleAssignments/write\",\"Microsoft.Authorization/roleAssignments/delete\",\"Microsoft.Compute/virtualMachines/delete\",\"Microsoft.KeyVault/vaults/delete\",\"Microsoft.OperationalInsights/workspaces/delete\",\"Microsoft.Resources/subscriptions/resourceGroups/delete\"]);\nAzureActivity\n| where OperationNameValue in (SensitiveOps)\n| project TimeGenerated, Caller, OperationNameValue, ActivityStatusValue, CallerIpAddress, ResourceId\n| sort by TimeGenerated desc\n| take 200",
+              "size": 0,
+              "title": "Sensitive operations timeline",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "showExportToExcel": true,
+              "gridSettings": {
+                "formatters": [
+                  { "columnMatch": "ActivityStatusValue", "formatter": 18, "formatOptions": { "thresholdsOptions": "colors", "thresholdsGrid": [ { "operator": "==", "thresholdValue": "Success", "representation": "orange", "text": "{0}{1}" }, { "operator": "Default", "representation": "gray", "text": "{0}{1}" } ], "customColumnWidthSetting": "12ch" } },
+                  { "columnMatch": "OperationNameValue", "formatter": 0, "formatOptions": { "customColumnWidthSetting": "34ch" } }
+                ],
+                "rowLimit": 200,
+                "filter": true
+              }
+            },
+            "name": "hunt-activity",
+            "styleSettings": { "showBorder": true, "margin": "0px 0px 15px 0px" }
+          },
+          {
+            "type": 1,
+            "content": { "json": "## 🪪 Sign-in anomalies\n*Risky or new-country sign-ins, and failed-then-succeeded patterns worth a second look.*" },
+            "name": "hunt-signin-hdr"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "SigninLogs\n| where RiskLevelDuringSignIn in (\"medium\",\"high\") or ResultType != 0\n| project TimeGenerated, UserPrincipalName, IPAddress, ResultType, ResultDescription, RiskLevelDuringSignIn, AppDisplayName, Location = tostring(LocationDetails.countryOrRegion)\n| sort by TimeGenerated desc\n| take 200",
+              "size": 0,
+              "title": "Risky / failed sign-ins",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "showExportToExcel": true,
+              "gridSettings": {
+                "formatters": [
+                  { "columnMatch": "ResultType", "formatter": 18, "formatOptions": { "thresholdsOptions": "colors", "thresholdsGrid": [ { "operator": "==", "thresholdValue": "0", "representation": "green", "text": "✓ {0}" }, { "operator": "Default", "representation": "redBright", "text": "✗ {0}" } ], "customColumnWidthSetting": "10ch" } },
+                  { "columnMatch": "RiskLevelDuringSignIn", "formatter": 18, "formatOptions": { "thresholdsOptions": "colors", "thresholdsGrid": [ { "operator": "==", "thresholdValue": "high", "representation": "redBright", "text": "{0}{1}" }, { "operator": "==", "thresholdValue": "medium", "representation": "orange", "text": "{0}{1}" }, { "operator": "Default", "representation": "gray", "text": "{0}{1}" } ] } }
+                ],
+                "rowLimit": 200,
+                "filter": true
+              }
+            },
+            "name": "hunt-signin",
+            "styleSettings": { "showBorder": true, "margin": "0px 0px 15px 0px" }
+          },
+          {
+            "type": 1,
+            "content": { "json": "## 🛰️ Threat intelligence\n*Indicators currently loaded from the AbuseIPDB feed. Live correlation against AzureActivity runs continuously via the \"TI Map IP Entity to AzureActivity\" analytics rule.*" },
+            "name": "hunt-ti-hdr"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "ThreatIntelIndicators\n| where Active == true\n| summarize IndicatorCount = dcount(IndicatorId) by SourceSystem, ThreatType = tostring(ThreatType)\n| extend Feed = SourceSystem",
+              "size": 0,
+              "title": "Active indicators by feed",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "piechart",
+              "chartSettings": {
+                "seriesLabelSettings": [],
+                "showLegend": true
+              }
+            },
+            "name": "hunt-ti",
+            "styleSettings": { "showBorder": true, "margin": "0px 0px 15px 0px" }
+          }
+        ]
+      },
+      "conditionalVisibility": { "parameterName": "Tab", "comparison": "isEqualTo", "value": "hunt" },
+      "name": "g-hunt"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 9,
+            "content": {
+              "version": "KqlParameterItem/1.0",
+              "parameters": [
+                { "id": "i1", "version": "KqlParameterItem/1.0", "name": "IPQuery", "label": "🔌 IP to investigate", "type": 1, "value": "" },
+                {
+                  "id": "i2", "version": "KqlParameterItem/1.0", "name": "InvestTimeRange", "label": "⏱ Range", "type": 4, "isRequired": true,
+                  "typeSettings": { "selectableValues": [ { "durationMs": 86400000 }, { "durationMs": 259200000 }, { "durationMs": 604800000 }, { "durationMs": 2592000000 } ], "allowCustom": true },
+                  "value": { "durationMs": 604800000 }
+                }
+              ],
+              "style": "above"
+            },
+            "name": "ip-input"
+          },
+          {
+            "type": 1,
+            "content": { "json": "## 🔎 Investigating `{IPQuery}`\n*Window: **{InvestTimeRange:label}***" },
+            "name": "i-echo",
+            "conditionalVisibility": { "parameterName": "IPQuery", "comparison": "isNotEqualTo", "value": "" }
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "buttons",
+              "links": [
+                { "id": "l1", "linkTarget": "Url", "linkLabel": "🔍 VirusTotal", "url": "https://www.virustotal.com/gui/ip-address/{IPQuery}", "style": "primary" },
+                { "id": "l2", "linkTarget": "Url", "linkLabel": "⚠️ AbuseIPDB", "url": "https://www.abuseipdb.com/check/{IPQuery}", "style": "primary" },
+                { "id": "l3", "linkTarget": "Url", "linkLabel": "📡 Shodan", "url": "https://www.shodan.io/host/{IPQuery}", "style": "secondary" },
+                { "id": "l4", "linkTarget": "Url", "linkLabel": "🌍 OTX", "url": "https://otx.alienvault.com/indicator/ip/{IPQuery}", "style": "secondary" },
+                { "id": "l5", "linkTarget": "Url", "linkLabel": "📊 GreyNoise", "url": "https://viz.greynoise.io/ip/{IPQuery}", "style": "secondary" },
+                { "id": "l6", "linkTarget": "Url", "linkLabel": "🔬 Censys", "url": "https://search.censys.io/hosts/{IPQuery}", "style": "secondary" },
+                { "id": "l7", "linkTarget": "Url", "linkLabel": "📍 IPinfo", "url": "https://ipinfo.io/{IPQuery}", "style": "secondary" },
+                { "id": "l8", "linkTarget": "Url", "linkLabel": "🚦 Talos", "url": "https://talosintelligence.com/reputation_center/lookup?search={IPQuery}", "style": "secondary" },
+                { "id": "l9", "linkTarget": "Url", "linkLabel": "🌀 Spur", "url": "https://spur.us/context/{IPQuery}", "style": "secondary" },
+                { "id": "l10", "linkTarget": "Url", "linkLabel": "✖️ X-Force", "url": "https://exchange.xforce.ibmcloud.com/ip/{IPQuery}", "style": "secondary" }
+              ]
+            },
+            "name": "i-links",
+            "conditionalVisibility": { "parameterName": "IPQuery", "comparison": "isNotEqualTo", "value": "" },
+            "styleSettings": { "margin": "5px 0px 15px 0px" }
+          },
+          {
+            "type": 1,
+            "content": { "json": "## 🧮 At a glance" },
+            "name": "s-glance",
+            "conditionalVisibility": { "parameterName": "IPQuery", "comparison": "isNotEqualTo", "value": "" }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let TargetIP = trim(@\"\\s+\", \"{IPQuery}\");\nlet SyslogHits = toscalar(Syslog | where SyslogMessage has TargetIP | count);\nlet ActivityHits = toscalar(AzureActivity | where CallerIpAddress == TargetIP | count);\nlet SigninHits = toscalar(SigninLogs | where IPAddress == TargetIP | count);\nlet TIHit = toscalar(ThreatIntelIndicators | where NetworkIP == TargetIP and Active == true | count);\nlet IncCount = toscalar(SecurityIncident | where AlertIds has TargetIP or Description has TargetIP | count);\nprint Metric = \"📜 Syslog mentions\", Value = SyslogHits, Detail = \"raw message match\"\n| union (print Metric = \"⚙️ AzureActivity hits\", Value = ActivityHits, Detail = \"CallerIpAddress\")\n| union (print Metric = \"🪪 Sign-in attempts\", Value = SigninHits, Detail = \"SigninLogs\")\n| union (print Metric = \"🛰️ TI matches\", Value = TIHit, Detail = \"active indicators\")\n| union (print Metric = \"🚨 Related incidents\", Value = IncCount, Detail = \"SecurityIncident\")",
+              "size": 0,
+              "timeContextFromParameter": "InvestTimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "tiles",
+              "tileSettings": {
+                "titleContent": { "columnMatch": "Metric", "formatter": 1 },
+                "leftContent": {
+                  "columnMatch": "Value",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "coldHot",
+                    "thresholdsOptions": "colors",
+                    "thresholdsGrid": [
+                      { "operator": ">", "thresholdValue": "0", "representation": "redBright", "text": "{0}" },
+                      { "operator": "Default", "representation": "green", "text": "{0}" }
+                    ]
+                  }
+                },
+                "secondaryContent": { "columnMatch": "Detail", "formatter": 1 },
+                "showBorder": true,
+                "size": "auto"
+              }
+            },
+            "name": "inv-summary",
+            "conditionalVisibility": { "parameterName": "IPQuery", "comparison": "isNotEqualTo", "value": "" },
+            "styleSettings": { "showBorder": true, "margin": "0px 0px 15px 0px" }
+          },
+          {
+            "type": 1,
+            "content": { "json": "## 📈 Activity timeline" },
+            "name": "s-timeline",
+            "conditionalVisibility": { "parameterName": "IPQuery", "comparison": "isNotEqualTo", "value": "" }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let TargetIP = trim(@\"\\s+\", \"{IPQuery}\");\nunion isfuzzy=true\n    (Syslog | where SyslogMessage has TargetIP | project TimeGenerated, Source = \"Syslog\"),\n    (AzureActivity | where CallerIpAddress == TargetIP | project TimeGenerated, Source = \"AzureActivity\"),\n    (SigninLogs | where IPAddress == TargetIP | project TimeGenerated, Source = \"SigninLogs\")\n| summarize Events = count() by Hour = bin(TimeGenerated, 1h), Source\n| order by Hour asc",
+              "size": 0,
+              "title": "Events per hour by source",
+              "timeContextFromParameter": "InvestTimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "timechart",
+              "chartSettings": { "showLegend": true }
+            },
+            "name": "inv-timeline",
+            "conditionalVisibility": { "parameterName": "IPQuery", "comparison": "isNotEqualTo", "value": "" },
+            "styleSettings": { "showBorder": true, "margin": "0px 0px 15px 0px" }
+          },
+          {
+            "type": 1,
+            "content": { "json": "## ⚡ Rate-burst peaks\n*Sub-second / per-minute spikes for this IP, from Syslog auth failures — a fast succession of attempts is a stronger brute-force signal than raw volume alone.*" },
+            "name": "s-burst",
+            "conditionalVisibility": { "parameterName": "IPQuery", "comparison": "isNotEqualTo", "value": "" }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let TargetIP = trim(@\"\\s+\", \"{IPQuery}\");\nlet base = Syslog | where SyslogMessage has TargetIP;\nlet peakOf = (unit:timespan, label:string) {\n    base\n    | summarize c = count() by b = bin(TimeGenerated, unit)\n    | top 1 by c desc\n    | extend Bucket = label\n    | project Bucket, PeakCount = c, PeakAt = b\n};\nunion isfuzzy=true (peakOf(1s, \"1 second\")), (peakOf(1m, \"1 minute\")), (peakOf(1h, \"1 hour\"))",
+              "size": 0,
+              "title": "Peak attempt rate",
+              "timeContextFromParameter": "InvestTimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  { "columnMatch": "Bucket", "formatter": 18, "formatOptions": { "thresholdsOptions": "colors", "thresholdsGrid": [ { "operator": "==", "thresholdValue": "1 second", "representation": "redBright", "text": "🚨 {0}" }, { "operator": "==", "thresholdValue": "1 minute", "representation": "orange", "text": "⚠️ {0}" }, { "operator": "Default", "representation": "blue", "text": "{0}" } ], "customColumnWidthSetting": "14ch" } },
+                  { "columnMatch": "PeakCount", "formatter": 8, "formatOptions": { "palette": "redBright" } }
+                ],
+                "rowLimit": 10,
+                "filter": true
+              }
+            },
+            "name": "inv-rateburst",
+            "conditionalVisibility": { "parameterName": "IPQuery", "comparison": "isNotEqualTo", "value": "" },
+            "styleSettings": { "showBorder": true, "margin": "0px 0px 15px 0px" }
+          }
+        ]
+      },
+      "conditionalVisibility": { "parameterName": "Tab", "comparison": "isEqualTo", "value": "investigate" },
+      "name": "g-investigate"
+    },
+    {
+      "type": 1,
+      "content": { "json": "---\n<sub>Built for the personal Sentinel SOC lab · [sentinel-soc-lab](https://github.com/TaruntejaDesireddy/sentinel-soc-lab) · [cybersoc-portfolio](https://github.com/TaruntejaDesireddy/cybersoc-portfolio)</sub>" },
+      "name": "footer",
+      "styleSettings": { "margin": "20px 0px 0px 0px" }
+    }
+  ],
+  "styleSettings": { "paddingStyle": "wide" },
+  "fallbackResourceIds": []
+}

@@ -1,0 +1,292 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": { "json": "# 📊 SOC Overview\n### Ingestion cost, data source health, and incident summary for the personal Sentinel lab" },
+      "name": "hdr",
+      "styleSettings": { "margin": "0px 0px 10px 0px" }
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "f1",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "label": "⏱ Time range",
+            "type": 4,
+            "value": { "durationMs": 604800000 },
+            "typeSettings": {
+              "selectableValues": [
+                { "durationMs": 86400000 },
+                { "durationMs": 259200000 },
+                { "durationMs": 604800000 },
+                { "durationMs": 2592000000 }
+              ],
+              "allowCustom": true
+            }
+          }
+        ],
+        "style": "above"
+      },
+      "name": "filters"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let openIncidents = toscalar(SecurityIncident | summarize arg_max(TimeGenerated, Status) by IncidentNumber | where Status in (\"New\",\"Active\") | count);\nlet totalAlerts = toscalar(SecurityAlert | count);\nlet activeSources = toscalar(Heartbeat | where TimeGenerated > ago(15m) | summarize dcount(Computer));\nlet signinCount = toscalar(union isfuzzy=true (SigninLogs), (AADNonInteractiveUserSignInLogs) | count);\nlet todayGB = toscalar(Usage | where TimeGenerated > startofday(now()) | where IsBillable == true | summarize round(sum(Quantity)/1024, 3));\nprint Metric = \"🚨 Open incidents\", Value = openIncidents, Detail = \"New + Active\"\n| union (print Metric = \"🔔 Total alerts\", Value = totalAlerts, Detail = \"SecurityAlert, all-time\")\n| union (print Metric = \"💓 Active sources\", Value = activeSources, Detail = \"heartbeat in last 15m\")\n| union (print Metric = \"🪪 Sign-ins\", Value = signinCount, Detail = \"selected window\")\n| union (print Metric = \"💰 GB today\", Value = todayGB, Detail = \"of 1 GB/day cap\")",
+        "size": 0,
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": { "columnMatch": "Metric", "formatter": 1 },
+          "leftContent": {
+            "columnMatch": "Value",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "coldHot",
+              "thresholdsOptions": "colors",
+              "thresholdsGrid": [
+                { "operator": ">", "thresholdValue": "0", "representation": "orange", "text": "{0}" },
+                { "operator": "Default", "representation": "green", "text": "{0}" }
+              ]
+            }
+          },
+          "secondaryContent": { "columnMatch": "Detail", "formatter": 1 },
+          "showBorder": true,
+          "size": "auto"
+        }
+      },
+      "name": "overview-tiles",
+      "styleSettings": { "showBorder": true, "margin": "0px 0px 15px 0px" }
+    },
+    {
+      "type": 1,
+      "content": { "json": "## 💰 Ingestion & cost\n*Daily volume by table against the workspace's 1 GB/day cap. Watch this — past the cap, ingestion gets dropped silently for the rest of the day, and rules/workbooks look \"broken\" when it's actually just the cap.*" },
+      "name": "cost-hdr"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "Usage\n| where IsBillable == true\n| summarize IngestedMB = sum(Quantity) by bin(TimeGenerated, 1d), DataType\n| render columnchart",
+        "size": 0,
+        "title": "Daily ingested MB by table",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "categoricalbar",
+        "chartSettings": { "showLegend": true, "xAxis": "TimeGenerated", "yAxis": ["IngestedMB"], "group": "DataType" }
+      },
+      "name": "cost-chart",
+      "styleSettings": { "showBorder": true, "margin": "0px 0px 15px 0px" }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "Usage\n| where TimeGenerated > startofday(now())\n| where IsBillable == true\n| summarize TodayMB = round(sum(Quantity), 2) by DataType\n| extend TodayGB = round(TodayMB / 1024, 4)\n| extend PctOfCap = round((TodayGB / 1.0) * 100, 1)\n| project DataType, TodayMB, TodayGB, [\"% of 1GB cap\"] = PctOfCap\n| sort by TodayMB desc",
+        "size": 0,
+        "title": "Today's ingestion by table",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "showExportToExcel": true,
+        "gridSettings": {
+          "formatters": [
+            { "columnMatch": "% of 1GB cap", "formatter": 8, "formatOptions": { "palette": "redBright", "customColumnWidthSetting": "16ch" } },
+            { "columnMatch": "TodayMB", "formatter": 8, "formatOptions": { "palette": "blue" } }
+          ],
+          "rowLimit": 50,
+          "filter": true
+        }
+      },
+      "name": "cost-table",
+      "styleSettings": { "showBorder": true, "margin": "0px 0px 15px 0px" }
+    },
+    {
+      "type": 1,
+      "content": { "json": "## 💓 Data source health\n*Every onboarded source (Syslog VM, this PC via Arc) should heartbeat regularly. A source that's gone quiet stops sending detections silently — this is how you'd notice.*" },
+      "name": "health-hdr"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "Heartbeat\n| summarize LastHeartbeat = max(TimeGenerated), Version = any(Version), OS = any(OSType) by Computer\n| extend MinutesSinceLastHeartbeat = datetime_diff('minute', now(), LastHeartbeat)\n| extend Status = case(MinutesSinceLastHeartbeat < 15, \"🟢 Online\", MinutesSinceLastHeartbeat < 60, \"🟡 Delayed\", \"🔴 Offline\")\n| project Computer, Status, MinutesSinceLastHeartbeat, LastHeartbeat, OS, Version\n| sort by MinutesSinceLastHeartbeat asc",
+        "size": 0,
+        "title": "Agent heartbeat status",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "showExportToExcel": true,
+        "gridSettings": {
+          "formatters": [
+            { "columnMatch": "Status", "formatter": 18, "formatOptions": { "thresholdsOptions": "colors", "thresholdsGrid": [ { "operator": "==", "thresholdValue": "🟢 Online", "representation": "green", "text": "{0}{1}" }, { "operator": "==", "thresholdValue": "🟡 Delayed", "representation": "orange", "text": "{0}{1}" }, { "operator": "==", "thresholdValue": "🔴 Offline", "representation": "redBright", "text": "{0}{1}" } ], "customColumnWidthSetting": "14ch" } },
+            { "columnMatch": "MinutesSinceLastHeartbeat", "formatter": 8, "formatOptions": { "palette": "yellowOrangeRed", "customColumnWidthSetting": "16ch" } }
+          ],
+          "rowLimit": 50,
+          "filter": true
+        }
+      },
+      "name": "health-table",
+      "styleSettings": { "showBorder": true, "margin": "0px 0px 15px 0px" }
+    },
+    {
+      "type": 1,
+      "content": { "json": "## 🚨 Incidents & alerts" },
+      "name": "inc-hdr"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "SecurityIncident\n| summarize arg_max(TimeGenerated, *) by IncidentNumber\n| summarize Count = count() by Severity, Status\n| sort by Count desc",
+        "size": 0,
+        "title": "Incidents by severity and status",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            { "columnMatch": "Severity", "formatter": 18, "formatOptions": { "thresholdsOptions": "colors", "thresholdsGrid": [ { "operator": "==", "thresholdValue": "High", "representation": "redBright", "text": "{0}{1}" }, { "operator": "==", "thresholdValue": "Medium", "representation": "orange", "text": "{0}{1}" }, { "operator": "==", "thresholdValue": "Low", "representation": "yellow", "text": "{0}{1}" }, { "operator": "Default", "representation": "gray", "text": "{0}{1}" } ] } },
+            { "columnMatch": "Count", "formatter": 8, "formatOptions": { "palette": "blue" } }
+          ],
+          "rowLimit": 50,
+          "filter": true
+        }
+      },
+      "name": "inc-table",
+      "styleSettings": { "showBorder": true, "margin": "0px 0px 15px 0px" }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "SecurityAlert\n| summarize Count = count() by AlertSeverity, ProviderName\n| sort by Count desc",
+        "size": 0,
+        "title": "Alerts by severity and provider",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart",
+        "chartSettings": { "showLegend": true, "seriesLabelSettings": [] }
+      },
+      "name": "alert-chart",
+      "styleSettings": { "showBorder": true, "margin": "0px 0px 15px 0px" }
+    },
+    {
+      "type": 1,
+      "content": { "json": "## 🪪 Identity activity\n*Interactive (SigninLogs) and service-to-service (AADNonInteractiveUserSignInLogs) sign-ins, combined.*" },
+      "name": "identity-hdr"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "union isfuzzy=true\n    (SigninLogs | extend Kind = \"Interactive\"),\n    (AADNonInteractiveUserSignInLogs | extend Kind = \"Non-interactive\")\n| extend Outcome = iff(ResultType == 0, \"Success\", \"Failure\")\n| summarize Count = count() by bin(TimeGenerated, 1h), Outcome\n| render timechart",
+        "size": 0,
+        "title": "Sign-in success/failure over time",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart",
+        "chartSettings": { "showLegend": true }
+      },
+      "name": "identity-chart",
+      "styleSettings": { "showBorder": true, "margin": "0px 0px 15px 0px" }
+    },
+    {
+      "type": 1,
+      "content": { "json": "## 📝 Audit & Azure activity" },
+      "name": "audit-hdr"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AuditLogs\n| summarize Count = count() by OperationName, InitiatedByUser = tostring(InitiatedBy.user.userPrincipalName)\n| sort by Count desc\n| take 50",
+        "size": 0,
+        "title": "Top audit operations by actor",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "showExportToExcel": true,
+        "gridSettings": {
+          "formatters": [
+            { "columnMatch": "Count", "formatter": 8, "formatOptions": { "palette": "blue" } },
+            { "columnMatch": "OperationName", "formatter": 0, "formatOptions": { "customColumnWidthSetting": "32ch" } }
+          ],
+          "rowLimit": 50,
+          "filter": true
+        }
+      },
+      "name": "audit-table",
+      "styleSettings": { "showBorder": true, "margin": "0px 0px 15px 0px" }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AzureActivity\n| summarize Count = count() by OperationNameValue, ActivityStatusValue\n| sort by Count desc\n| take 50",
+        "size": 0,
+        "title": "Top Azure Activity operations",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "showExportToExcel": true,
+        "gridSettings": {
+          "formatters": [
+            { "columnMatch": "ActivityStatusValue", "formatter": 18, "formatOptions": { "thresholdsOptions": "colors", "thresholdsGrid": [ { "operator": "==", "thresholdValue": "Success", "representation": "green", "text": "{0}{1}" }, { "operator": "==", "thresholdValue": "Failure", "representation": "redBright", "text": "{0}{1}" }, { "operator": "Default", "representation": "gray", "text": "{0}{1}" } ], "customColumnWidthSetting": "12ch" } },
+            { "columnMatch": "OperationNameValue", "formatter": 0, "formatOptions": { "customColumnWidthSetting": "34ch" } },
+            { "columnMatch": "Count", "formatter": 8, "formatOptions": { "palette": "blue" } }
+          ],
+          "rowLimit": 50,
+          "filter": true
+        }
+      },
+      "name": "activity-table",
+      "styleSettings": { "showBorder": true, "margin": "0px 0px 15px 0px" }
+    },
+    {
+      "type": 1,
+      "content": { "json": "## 📡 Syslog volume" },
+      "name": "syslog-hdr"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "Syslog\n| summarize Count = count() by bin(TimeGenerated, 1h), Facility\n| render timechart",
+        "size": 0,
+        "title": "Syslog events per hour by facility",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart",
+        "chartSettings": { "showLegend": true }
+      },
+      "name": "syslog-chart",
+      "styleSettings": { "showBorder": true, "margin": "0px 0px 15px 0px" }
+    },
+    {
+      "type": 1,
+      "content": { "json": "---\n<sub>Built for the personal Sentinel SOC lab · companion to [Hunt & Investigate](hunt-and-investigate.json) · [sentinel-soc-lab](https://github.com/TaruntejaDesireddy/sentinel-soc-lab)</sub>" },
+      "name": "footer",
+      "styleSettings": { "margin": "20px 0px 0px 0px" }
+    }
+  ],
+  "styleSettings": { "paddingStyle": "wide" },
+  "fallbackResourceIds": []
+}
