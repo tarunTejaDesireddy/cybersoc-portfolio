@@ -2,7 +2,14 @@
 
 535 questions from a face-to-face L2 SOC Analyst interview question bank, answered and organized for fast, effective study. Built from a 25-phase question bank covering SOC fundamentals, networking, Windows/AD, identity, email security, malware, MITRE ATT&CK, Microsoft Sentinel, KQL, Defender XDR, firewalls, Linux, incident-response scenarios, cloud security, detection engineering, automation, and behavioral/L2-thinking questions.
 
-**Start here → [`00-CRAM-SHEET.md`](00-CRAM-SHEET.md)** — the highest-yield, last-hour summary: diagrams, tables, and KQL snippets you should be able to redraw/recite from memory.
+## Start here
+
+| File | Use it for |
+|---|---|
+| **[`00-CRAM-SHEET.md`](00-CRAM-SHEET.md)** | **Read this first and last.** Event IDs, ports, process trees, AD attacks, the 5 KQL queries, ATT&CK order, and the things people forget — all in one page |
+| **[`SCENARIO-DRILLS.md`](SCENARIO-DRILLS.md)** | **Practice out loud.** 15 rapid-fire scenarios with hidden answers, plus the 15 follow-up probes to drill yourself with |
+| [`phase-16`](phase-16-incident-response-scenarios.md) | All 31 incident scenarios, fully worked |
+| [`phase-25`](phase-25-l2-thinking-questions.md) | The follow-up probes that separate L1 from L2 |
 
 ## How to study this if you're short on time
 
@@ -14,16 +21,18 @@ question → concept → evidence → investigation → decision → action
 
 A weak (L1) answer states a fact. A strong (L2) answer shows how you'd *prove* it — what you'd check first, second, third, and when you'd escalate or contain. Interviewers at this level are listening for the investigation chain, not the definition.
 
-### If you have 2-3 hours tonight
-1. Read [`00-CRAM-SHEET.md`](00-CRAM-SHEET.md) fully — 30-40 min.
-2. Read all **Tier 1** files below, focusing on the *investigation steps* and diagrams, not memorizing prose — 90 min.
-3. Skim [`phase-25-l2-thinking-questions.md`](phase-25-l2-thinking-questions.md) — these are the follow-up probes that decide whether you sound like L1 or L2.
+### If you have 2-3 hours tonight (the realistic plan)
+1. [`00-CRAM-SHEET.md`](00-CRAM-SHEET.md) — read it fully. **30 min.**
+2. [`phase-16`](phase-16-incident-response-scenarios.md) — the scenario bank. This is the highest-return hour you will spend. **60 min.**
+3. [`SCENARIO-DRILLS.md`](SCENARIO-DRILLS.md) — practice 10 of them **out loud**. **30 min.**
+4. [`phase-25`](phase-25-l2-thinking-questions.md) — the follow-up probes. **20 min.**
+5. [`phase-24`](phase-24-behavioral-questions.md) — fill in the worksheet with your own 4 incidents, and write out "why Lekhwiya" word for word. **15 min.**
 
 ### If you have a full evening (6-8 hours)
-Work Tier 1 → Tier 2 → Tier 3 in order, in one sitting per tier. Re-read the Cram Sheet again right before you sleep and again in the morning.
+Do the above first, then work Tier 1 → Tier 2 → Tier 3 in order. Re-read the Cram Sheet before you sleep and again in the morning.
 
 ### Morning of the interview
-Re-read `00-CRAM-SHEET.md` only. Do not try to learn anything new — consolidate.
+Re-read `00-CRAM-SHEET.md` only, and say three drills out loud. Do not learn anything new — consolidate.
 
 ## Priority tiers
 
