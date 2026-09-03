@@ -54,6 +54,16 @@ sample data.
 
 Details in [`workbooks/README.md`](workbooks/README.md).
 
+## Data Health Dashboard (`/data-health-dashboard`)
+
+A standalone Streamlit app, separate from the Workbooks above: table freshness across the whole
+workspace (not just `Heartbeat`-based source health the way `soc-overview.json`'s health section
+does), plus analytics rules grouped by the table each one actually reads — a relationship that
+isn't a structured field anywhere in Sentinel's data model, so this parses it out of each rule's
+raw KQL. Built in Streamlit specifically for that last piece; see
+[`data-health-dashboard/README.md`](data-health-dashboard/README.md) for why, the exact heuristics
+used, and the required (separately-scoped) service principal.
+
 ## Infrastructure (`/infrastructure`)
 
 Bicep IaC for standing the workspace up from nothing — Log Analytics workspace, Sentinel
