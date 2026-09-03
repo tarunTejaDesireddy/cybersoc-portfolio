@@ -71,6 +71,11 @@ This is a **separate credential from `ip-threat-dashboard`'s** — same shape, d
 privileged scope (it reads Sentinel resources, not just log data), so it gets its own
 narrowly-scoped service principal rather than widening that one's.
 
+**Fastest path:** `./setup-service-principal.sh <subscription-id>` — creates the service
+principal, grants both roles below, and prints a ready-to-paste secrets block. Needs your own
+`az login` session; it writes real resources to your subscription, so read it before running it.
+Everything below is what that script does and why, for when you want to do it by hand instead.
+
 ```toml
 [azure]
 tenant_id = "<directory (tenant) ID>"
