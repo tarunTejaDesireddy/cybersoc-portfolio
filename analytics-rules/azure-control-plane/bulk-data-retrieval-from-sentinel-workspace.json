@@ -1,0 +1,50 @@
+{
+    "name":  "c3e9f5a4-7da6-4f83-9a29-5b4cae8d3f62",
+    "kind":  "Scheduled",
+    "properties":  {
+                       "queryFrequency":  "PT1H",
+                       "queryPeriod":  "PT1H",
+                       "triggerOperator":  "GreaterThan",
+                       "triggerThreshold":  0,
+                       "incidentConfiguration":  {
+                                                     "createIncident":  true,
+                                                     "groupingConfiguration":  {
+                                                                                   "enabled":  true,
+                                                                                   "reopenClosedIncident":  false,
+                                                                                   "lookbackDuration":  "P1D",
+                                                                                   "matchingMethod":  "Selected",
+                                                                                   "groupByEntities":  [
+                                                                                                           "Account"
+                                                                                                       ],
+                                                                                   "groupByAlertDetails":  null,
+                                                                                   "groupByCustomDetails":  null
+                                                                               }
+                                                 },
+                       "entityMappings":  [
+                                              {
+                                                  "entityType":  "Account",
+                                                  "fieldMappings":  [
+                                                                        {
+                                                                            "identifier":  "FullName",
+                                                                            "columnName":  "AADEmail"
+                                                                        }
+                                                                    ]
+                                              }
+                                          ],
+                       "severity":  "Low",
+                       "query":  "LAQueryLogs | where ResponseCode == 200 | where isnotempty(AADEmail) | summarize QueryCount = count(), TotalRows = sum(ResponseRowCount), TotalScannedGB = round(sum(ScannedGB), 3), DistinctQueries = dcount(QueryThumbprint), SampleQueries = make_set(QueryText, 5), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by AADEmail, RequestClientApp | where TotalRows \u003e= 50000 or TotalScannedGB \u003e= 1.0 | extend TimeGenerated = EndTime",
+                       "suppressionDuration":  "PT5H",
+                       "suppressionEnabled":  false,
+                       "tactics":  [
+                                       "Collection",
+                                       "Exfiltration"
+                                   ],
+                       "techniques":  [
+                                          "T1213"
+                                      ],
+                       "displayName":  "Exfiltration - Bulk Data Retrieval from Sentinel Workspace",
+                       "enabled":  true,
+                       "description":  "A single identity pulled an unusually large volume of data out of this Sentinel workspace within one hour, measured by rows returned or gigabytes scanned. This detects the SIEM itself being used as the exfiltration source - a compromised analyst session, a stolen token, or an insider staging log data. Relevant here because three soc-analyst reader accounts hold query access to this workspace. THRESHOLDS ARE PLACEHOLDERS: 50,000 rows or 1 GB scanned per hour is far above anything this quiet lab produces normally, so tune both upward once you have a real baseline of your own query habits.",
+                       "alertRuleTemplateName":  null
+                   }
+}
